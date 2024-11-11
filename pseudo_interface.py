@@ -332,7 +332,24 @@ class BibliotecaApp:
                 data_hoje_str = data_hoje_entry.get()
                 data_hoje = datetime.datetime.strptime(data_hoje_str, "%d-%m-%Y").date()
                 
-                # Função para processar a renovação
+                # Verificar renovação
+                emprestimo = DAO.get_emprestimo(ISBN, num_exemplar)
+                if not emprestimo:
+                    messagebox.showwarning("Erro", "Empréstimo não encontrado!")
+                    return
+    
+                # Verifica as condições para renovação
+                if data_hoje > datetime.datetime.strptime(emprestimo['Fim'], "%d-%m-%Y").date():
+                    messagebox.showwarning("Erro", "Livro atrasado, não pode ser renovado.")
+                    return
+                if emprestimo['Renovacoes'] >= 3:
+                    messagebox.showwarning("Erro", "Limite de renovações atingido.")
+                    return
+                if emprestimo['Data de devolucao']:
+                    messagebox.showwarning("Erro", "Livro já foi devolvido, não é possível renovar.")
+                    return
+                
+                # Processa a renovação
                 biblioteca_camada_logica.renovar_emprestimo(ISBN, num_exemplar, data_hoje)
                 messagebox.showinfo("Sucesso", "Renovação realizada com sucesso!")
                 self.create_main_menu()
