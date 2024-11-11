@@ -1,13 +1,24 @@
+CREATE FUNCTION isentar_multa() RETURNS TRIGGER AS $$
+BEGIN
+    -- Verifica se a categoria do usuário é 'Professor' ou 'Professor Pós-graduação'
+    IF NEW.ID_Categoria IN (SELECT ID_cat FROM Categoria WHERE Nome IN ('Professor', 'Professor Pós-graduação')) THEN
+        NEW.Multa := 0;  -- Isenta a multa
+    END IF;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TRIGGER isentar_multas_professores
 BEFORE UPDATE ON Usuario
 FOR EACH ROW
-WHEN (NEW.Categoria = 'Professor' OR NEW.Categoria = 'Professor Pós-graduação')
+WHEN (NEW.ID_Categoria IN (SELECT ID_cat FROM Categoria WHERE Nome IN ('Professor', 'Professor Pós-graduação')))
 EXECUTE FUNCTION isentar_multa();
 
-CREATE FUNCTION isentar_multa() RETURNS TRIGGER AS $$
+CREATE FUNCTION verificar_limite_renovacoes() RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.Categoria = 'Professor' OR NEW.Categoria = 'Professor Pós-graduação' THEN
-        NEW.Multa := 0;
+    -- Verifica se o número de renovações excede 3
+    IF NEW.Renovacoes > 3 THEN
+        RAISE EXCEPTION 'O empréstimo não pode ser renovado mais que 3 vezes.';
     END IF;
     RETURN NEW;
 END;
@@ -19,10 +30,11 @@ FOR EACH ROW
 WHEN (NEW.Renovacoes > 3)
 EXECUTE FUNCTION verificar_limite_renovacoes();
 
-CREATE FUNCTION verificar_limite_renovacoes() RETURNS TRIGGER AS $$
+CREATE FUNCTION verificar_colecao_reserva() RETURNS TRIGGER AS $$
 BEGIN
-    IF NEW.Renovacoes > 3 THEN
-        RAISE EXCEPTION 'O empréstimo não pode ser renovado mais que 3 vezes.';
+    -- Verifica se o livro pertence à coleção 'Reserva'
+    IF (SELECT Nome FROM Colecao WHERE ID = (SELECT ID_Colecao FROM Livro WHERE ISBN = (SELECT ISBN_Livro FROM Exemplar WHERE id = NEW.ID_Exemplar))) = 'Reserva' THEN
+        RAISE EXCEPTION 'Não é permitido emprestar exemplares da coleção de reserva.';
     END IF;
     RETURN NEW;
 END;
@@ -32,15 +44,6 @@ CREATE TRIGGER impedir_emprestimo_reserva
 BEFORE INSERT ON Emprestimo
 FOR EACH ROW
 EXECUTE FUNCTION verificar_colecao_reserva();
-
-CREATE FUNCTION verificar_colecao_reserva() RETURNS TRIGGER AS $$
-BEGIN
-    IF (SELECT Nome FROM Colecao WHERE ID = (SELECT ID_Colecao FROM Livro WHERE ISBN = (SELECT ISBN_Livro FROM Exemplar WHERE id = NEW.ID_Exemplar))) = 'Reserva' THEN
-        RAISE EXCEPTION 'Não é permitido emprestar exemplares da coleção de reserva.';
-    END IF;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 CREATE FUNCTION pode_emprestar(id_usuario INT) RETURNS BOOLEAN AS $$
 DECLARE
@@ -59,15 +62,15 @@ BEGIN
     FROM Usuario
     WHERE ID = id_usuario;
 
-    -- Verifica se o usuário excedeu o limite de livros emprestados
-    SELECT COUNT(*) >= (SELECT Tempo_Emprestimo FROM Categoria WHERE ID_cat = (SELECT Categoria_ID FROM Usuario WHERE ID = id_usuario)) INTO limite
+    -- Verifica se o usuário excedeu o limite de empréstimos
+    SELECT COUNT(*) >= (SELECT Tempo_Emprestimo FROM Categoria WHERE ID_cat = (SELECT ID_Categoria FROM Usuario WHERE ID = id_usuario)) INTO limite
     FROM Emprestimo
     WHERE ID_Usuario = id_usuario AND Data_Dev IS NULL;
 
     IF atraso OR multa OR limite THEN
-        RETURN FALSE;
+        RETURN FALSE;  -- Não pode emprestar
     ELSE
-        RETURN TRUE;
+        RETURN TRUE;  -- Pode emprestar
     END IF;
 END;
 $$ LANGUAGE plpgsql;
