@@ -4,16 +4,17 @@ import DAO
 
 # Classes da Biblioteca
 class Livro:
-    def __init__(self, titulo, autores, ISBN, editora, colecao):
+    def __init__(self, titulo, autores, isbn, editora,id_colecao, id_bibliotecario):
         self.titulo = titulo
         self.autores = autores  # lista de autores
-        self.ISBN = ISBN
+        self.isbn = isbn
         self.editora = editora
-        self.colecao = colecao
+        self.id_colecao = id_colecao #CORRIGIR PARA RECEBER O ID DA COLECAO
+        self.id_bibliotecario = id_bibliotecario
         self.exemplares = []
 
     def to_json(self):
-        json = {'Titulo': self.titulo, 'autores': self.autores, 'ISBN': self.ISBN, 'Editora': self.editora, 'Colecao': self.colecao, 'Exemplares': self.exemplares}
+        json = {'Titulo': self.titulo, 'autores': self.autores, 'isbn': self.isbn, 'Editora': self.editora, 'Colecao': self.colecao, 'Exemplares': self.exemplares}
         return json
 
     def nome_dos_autores_string(self):
@@ -26,10 +27,17 @@ class Livro:
         return nomes
 
 
+class Colecao:
+    def __init__(self, nome):
+        self.nome = nome
+        self.id = None  # O ID será atribuído após a inserção no banco
+
+
 class Exemplar:
-    def __init__(self, num, status):
-        self.num = num
+    def __init__(self, id, status, id_bibliotecario):
+        self.id = id
         self.status = status
+        self.id_bibliotecario = id_bibliotecario
         self.posse = None
 
     def to_json(self):
@@ -69,7 +77,7 @@ class Assistente:
 
 
 class Usuario:
-    def __init__(self, cpf, nome, rua, cidade, cep, telefone, endereco, multa, categoria):
+    def __init__(self, cpf, nome, rua, cidade, cep, telefone, endereco, multa, id_categoria):
         self.cpf = cpf
         self.nome = nome
         self.rua = rua
@@ -78,7 +86,7 @@ class Usuario:
         self.telefone = telefone
         self.endereco = endereco
         self.multa = multa
-        self.categoria = categoria
+        self.id_categoria = id_categoria
         self.emprestimos = []
 
     def to_json(self):
@@ -92,12 +100,12 @@ class Autor:
 
 
 class Emprestimo:
-    def __init__(self, data_hoje, ISBN, num_exemplar, CPF, qtd_dias):
+    def __init__(self, data_hoje, isbn, num_exemplar, CPF, qtd_dias):
         self.id_emprestimo = DAO.get_id_ultimo_emprestimo() + 1
         self.dataInicial = data_hoje.strftime('%d-%m-%Y')
         self.dataFinal = (data_hoje + timedelta(days=qtd_dias)).strftime('%d-%m-%Y')
         self.dia_que_foi_devolvido = None
-        self.ISBN = ISBN
+        self.isbn = isbn
         self.num_exemplar = num_exemplar
         self.CPF = CPF
         self.multa = None
@@ -110,7 +118,7 @@ class Emprestimo:
             self.usuario.penalizar(data, self)
 
     def to_json(self):
-        json = {'id': self.id_emprestimo, 'Inicio': self.dataInicial, 'Fim': self.dataFinal, 'Data de devolucao': self.dia_que_foi_devolvido, 'ISBN': self.ISBN, 'Exemplar': self.num_exemplar, 'CPF': self.CPF, 'Multa': self.multa, 'Renovacoes': self.renovacoes}
+        json = {'id': self.id_emprestimo, 'Inicio': self.dataInicial, 'Fim': self.dataFinal, 'Data de devolucao': self.dia_que_foi_devolvido, 'isbn': self.isbn, 'Exemplar': self.num_exemplar, 'CPF': self.CPF, 'Multa': self.multa, 'Renovacoes': self.renovacoes}
         return json
 
 
@@ -132,7 +140,7 @@ def usuario_possui_atraso(CPF, data_hoje):
 
 
 def emprestar_livro(emprestimo, data_hoje):
-    exemplar = DAO.get_exemplar(emprestimo.ISBN, emprestimo.num_exemplar)
+    exemplar = DAO.get_exemplar(emprestimo.isbn, emprestimo.num_exemplar)
 
     if not exemplar:
         print("Exemplar nao cadastrado.")
@@ -140,7 +148,7 @@ def emprestar_livro(emprestimo, data_hoje):
         usuario = DAO.get_usuario(emprestimo.CPF)
 
         limite_de_emprestimos = 4
-        emprestimos = usuario['Emprestimos']
+        emprestimos = usuario[9]
         qtd_emprestimos = 0
 
         if emprestimos:
@@ -154,15 +162,15 @@ def emprestar_livro(emprestimo, data_hoje):
             print("Usuario possui multa pendente.\n")
         elif qtd_emprestimos + 1 > limite_de_emprestimos:
             print("Usuario ja atingiu limite de emprestimos!\n")
-        elif DAO.get_colecao(emprestimo.ISBN).lower() == "reserva":
+        elif DAO.get_colecao(emprestimo.isbn).lower() == "reserva":
             print("Esse livro faz parte da colecao reserva, logo não pode ser emprestado.")
         else:
-            DAO.atualizar_exemplar(emprestimo.ISBN, emprestimo.num_exemplar, "Indisponivel", emprestimo.CPF)
+            DAO.atualizar_exemplar(emprestimo.isbn, emprestimo.num_exemplar, "Indisponivel", emprestimo.CPF)
             DAO.adicionar_emprestimo_usuario(emprestimo)
 
 
-def devolver_livro(ISBN, num_exemplar, data_devolucao):
-    emprestimo = DAO.get_emprestimo(ISBN, num_exemplar)
+def devolver_livro(isbn, num_exemplar, data_devolucao):
+    emprestimo = DAO.get_emprestimo(isbn, num_exemplar)
     multa = None
     renovacoes = emprestimo['Renovacoes']
 
@@ -170,16 +178,16 @@ def devolver_livro(ISBN, num_exemplar, data_devolucao):
         multa = 30
 
     Fim = emprestimo["Fim"]
-    DAO.atualizar_emprestimo(ISBN, num_exemplar, data_devolucao.strftime('%d-%m-%Y'), multa, renovacoes, Fim)
-    DAO.atualizar_exemplar(ISBN, num_exemplar, 'Disponivel', None)
+    DAO.atualizar_emprestimo(isbn, num_exemplar, data_devolucao.strftime('%d-%m-%Y'), multa, renovacoes, Fim)
+    DAO.atualizar_exemplar(isbn, num_exemplar, 'Disponivel', None)
     DAO.apagar_emprestimo_usuario(emprestimo['CPF'], emprestimo['id'], multa)
  
 
 
 
-def renovar_emprestimo(ISBN, num_exemplar, data_hoje):
+def renovar_emprestimo(isbn, num_exemplar, data_hoje):
     # Obtém os dados do empréstimo e usuário
-    emprestimo = DAO.get_emprestimo(ISBN, num_exemplar)
+    emprestimo = DAO.get_emprestimo(isbn, num_exemplar)
     multa = emprestimo['Multa']
     
     usuario = DAO.get_usuario(emprestimo['CPF'])
@@ -216,7 +224,7 @@ def renovar_emprestimo(ISBN, num_exemplar, data_hoje):
         Fim = (data_hoje + timedelta(days=tempo_em_dias)).strftime("%d-%m-%Y")
         
         # Atualiza o empréstimo no banco de dados
-        DAO.atualizar_emprestimo(ISBN, num_exemplar, data_devolucao, multa, renovacoes, Fim)
+        DAO.atualizar_emprestimo(isbn, num_exemplar, data_devolucao, multa, renovacoes, Fim)
         
         # Atualiza a informação de renovação do usuário
         DAO.atualizar_emprestimo_em_usuario(usuario['CPF'], emprestimo['id'], renovacoes, Fim)

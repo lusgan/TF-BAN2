@@ -19,6 +19,7 @@ class BibliotecaApp:
         
         tk.Label(self.root, text="Menu Principal", font=("Arial", 16)).pack(pady=10)
         buttons = [
+            ("Cadastrar Coleção", self.cadastrar_colecao),  # Adicionando o botão para Coleção
             ("Cadastrar Bibliotecário", self.cadastrar_bibliotecario),
             ("Cadastrar Assistente", self.cadastrar_assistente),
             ("Cadastrar Usuário", self.cadastrar_usuario),
@@ -34,6 +35,7 @@ class BibliotecaApp:
         
         for text, command in buttons:
             tk.Button(self.root, text=text, command=command, width=30).pack(pady=5)
+
     
     def cadastrar_bibliotecario(self):
         self.clear_window()
@@ -110,17 +112,12 @@ class BibliotecaApp:
             tk.Radiobutton(self.root, text=text, variable=categoria_var, value=value).pack(anchor="w")
         
         def submit():
-            categoria_map = {
-                1: {'id': 1, 'Categoria': 'Aluno de graduação'},
-                2: {'id': 2, 'Categoria': "Aluno de pós-graduação"},
-                3: {'id': 3, 'categoria': 'Professor'},
-                4: {'id': 4, 'categoria': "Professor de pós-graduação"}
-            }
             
+            categoria_id = categoria_var.get()
             usuario = biblioteca_camada_logica.Usuario(
                 entries["CPF"].get(), entries["Nome"].get(), entries["Rua"].get(), 
                 entries["Cidade"].get(), entries["CEP"].get(), entries["Telefone"].get(), 
-                entries["Endereço"].get(), 0, categoria_map[categoria_var.get()]
+                entries["Endereço"].get(), 0, categoria_id
             )
             DAO.cadastrar_usuario(usuario)
             messagebox.showinfo("Sucesso", "Usuário cadastrado com sucesso!")
@@ -132,7 +129,7 @@ class BibliotecaApp:
         self.clear_window()
         tk.Label(self.root, text="Cadastrar Livro", font=("Arial", 16)).pack(pady=10)
         
-        fields = ["Título", "Autores (separados por vírgula)", "ISBN", "Editora", "Coleção"]
+        fields = ["Título", "Autores (separados por vírgula)", "isbn", "Editora", "id_coleção", "id_bibliotecario"]
         entries = {}
         
         for field in fields:
@@ -144,8 +141,8 @@ class BibliotecaApp:
         def submit():
             autores = entries["Autores (separados por vírgula)"].get().split(",")
             livro = biblioteca_camada_logica.Livro(
-                entries["Título"].get(), autores, entries["ISBN"].get(), 
-                entries["Editora"].get(), entries["Coleção"].get()
+                entries["Título"].get(), autores, entries["isbn"].get(), 
+                entries["Editora"].get(), entries["id_coleção"].get(), entries["id_bibliotecario"].get()
             )
             DAO.cadastrar_livro(livro)
             messagebox.showinfo("Sucesso", "Livro cadastrado com sucesso!")
@@ -157,13 +154,17 @@ class BibliotecaApp:
         self.clear_window()
         tk.Label(self.root, text="Cadastrar Exemplar", font=("Arial", 16)).pack(pady=10)
         
-        tk.Label(self.root, text="ISBN").pack()
+        tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
         tk.Label(self.root, text="Número do Exemplar").pack()
         num_entry = tk.Entry(self.root)
         num_entry.pack()
+        
+        tk.Label(self.root, text="id_bibliotecario").pack()
+        id_bibliotecario_entry = tk.Entry(self.root)
+        id_bibliotecario_entry.pack()
         
         tk.Label(self.root, text="Status").pack()
         status_var = tk.StringVar(value="Disponível")
@@ -173,14 +174,14 @@ class BibliotecaApp:
         
         def submit():
             if not DAO.verificar_isbn(isbn_entry.get()):
-                messagebox.showwarning("Erro", "ISBN não encontrado no banco de dados!")
+                messagebox.showwarning("Erro", "isbn não encontrado no banco de dados!")
                 return
             
-            if DAO.get_exemplar(isbn_entry.get(), int(num_entry.get())):
+            if DAO.get_exemplar(isbn_entry.get(), int(num_entry.get()))[0]:
                 messagebox.showwarning("Erro", "Exemplar já cadastrado!")
                 return
             
-            exemplar = biblioteca_camada_logica.Exemplar(int(num_entry.get()), status_var.get())
+            exemplar = biblioteca_camada_logica.Exemplar(int(num_entry.get()), status_var.get(),int(id_bibliotecario_entry.get()))
             DAO.cadastrar_exemplar(exemplar, isbn_entry.get())
             messagebox.showinfo("Sucesso", "Exemplar cadastrado com sucesso!")
             self.create_main_menu()
@@ -194,7 +195,7 @@ class BibliotecaApp:
         tk.Label(self.root, text="Realizar Empréstimo", font=("Arial", 16)).pack(pady=10)
         
         # Campos de entrada para realizar o empréstimo
-        tk.Label(self.root, text="ISBN").pack()
+        tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
@@ -209,7 +210,7 @@ class BibliotecaApp:
         def submit():
             try:
                 # Verificação dos dados do usuário e exemplar
-                ISBN = isbn_entry.get()
+                isbn = isbn_entry.get()
                 num_exemplar = int(exemplar_entry.get())
                 CPF = cpf_entry.get()
                 
@@ -218,17 +219,20 @@ class BibliotecaApp:
                     messagebox.showwarning("Erro", "Usuário não encontrado!")
                     return
                 
-                # Define a quantidade de dias com base na categoria do usuário
-                categoria = usuario['Categoria']['Categoria']
+                # Supondo que a tupla retornada tenha a categoria_id na posição 2
+                categoria_id = usuario[8]  # Acessa o id da categoria da tupla
                 qtd_dias = {
-                    "Aluno de graduação": 15,
-                    "Aluno de pós-graduação": 30,
-                    "Professor": 30,
-                    "Professor de pós-graduação": 90
-                }.get(categoria, 15)
+                    1: 15,  # Aluno de graduação
+                    2: 30,  # Aluno de pós-graduação
+                    3: 30,  # Professor
+                    4: 90   # Professor de pós-graduação
+                }.get(categoria_id, 15)  # Valor padrão é 15 se o id não for encontrado
+                
+                # Agora, a variável qtd_dias terá o valor adequado com base no id da categoria
+
                 
                 data_hoje = datetime.date.today()
-                emprestimo = biblioteca_camada_logica.Emprestimo(data_hoje, ISBN, num_exemplar, CPF, qtd_dias)
+                emprestimo = biblioteca_camada_logica.Emprestimo(data_hoje, isbn, num_exemplar, CPF, qtd_dias)
                 biblioteca_camada_logica.emprestar_livro(emprestimo, data_hoje)
                 
                 messagebox.showinfo("Sucesso", "Empréstimo realizado com sucesso!")
@@ -246,7 +250,7 @@ class BibliotecaApp:
         tk.Label(self.root, text="Localizar Exemplar", font=("Arial", 16)).pack(pady=10)
         
         # Campos de entrada para localizar o exemplar
-        tk.Label(self.root, text="ISBN").pack()
+        tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
@@ -256,11 +260,11 @@ class BibliotecaApp:
         
         def buscar_exemplar():
             try:
-                ISBN = isbn_entry.get()
+                isbn = isbn_entry.get()
                 numero = int(exemplar_entry.get())
                 
                 # Usa a função DAO.get_exemplar para localizar o exemplar
-                exemplar = DAO.get_exemplar(ISBN, numero)
+                exemplar = DAO.get_exemplar(isbn, numero)
                 if exemplar:
                     messagebox.showinfo("Exemplar Encontrado", f"Exemplar: {exemplar}")
                 else:
@@ -276,7 +280,7 @@ class BibliotecaApp:
         tk.Label(self.root, text="Devolução de Exemplar", font=("Arial", 16)).pack(pady=10)
         
         # Campos de entrada para devolução de exemplar
-        tk.Label(self.root, text="ISBN").pack()
+        tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
@@ -290,13 +294,13 @@ class BibliotecaApp:
         
         def devolver():
             try:
-                ISBN = isbn_entry.get()
+                isbn = isbn_entry.get()
                 num_exemplar = int(exemplar_entry.get())
                 data_devolucao_str = data_devolucao_entry.get()
                 data_devolucao = datetime.datetime.strptime(data_devolucao_str, "%d-%m-%Y").date()
                 
                 # Função para processar a devolução
-                biblioteca_camada_logica.devolver_livro(ISBN, num_exemplar, data_devolucao)
+                biblioteca_camada_logica.devolver_livro(isbn, num_exemplar, data_devolucao)
                 messagebox.showinfo("Sucesso", "Devolução realizada com sucesso!")
                 self.create_main_menu()
             except ValueError:
@@ -313,7 +317,7 @@ class BibliotecaApp:
         tk.Label(self.root, text="Renovar Empréstimo", font=("Arial", 16)).pack(pady=10)
         
         # Campos de entrada para renovação de empréstimo
-        tk.Label(self.root, text="ISBN").pack()
+        tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
@@ -327,13 +331,13 @@ class BibliotecaApp:
         
         def renovar():
             try:
-                ISBN = isbn_entry.get()
+                isbn = isbn_entry.get()
                 num_exemplar = int(exemplar_entry.get())
                 data_hoje_str = data_hoje_entry.get()
                 data_hoje = datetime.datetime.strptime(data_hoje_str, "%d-%m-%Y").date()
                 
                 # Verificar renovação
-                emprestimo = DAO.get_emprestimo(ISBN, num_exemplar)
+                emprestimo = DAO.get_emprestimo(isbn, num_exemplar)
                 if not emprestimo:
                     messagebox.showwarning("Erro", "Empréstimo não encontrado!")
                     return
@@ -350,7 +354,7 @@ class BibliotecaApp:
                     return
                 
                 # Processa a renovação
-                biblioteca_camada_logica.renovar_emprestimo(ISBN, num_exemplar, data_hoje)
+                biblioteca_camada_logica.renovar_emprestimo(isbn, num_exemplar, data_hoje)
                 messagebox.showinfo("Sucesso", "Renovação realizada com sucesso!")
                 self.create_main_menu()
             except ValueError:
@@ -358,7 +362,32 @@ class BibliotecaApp:
         
         tk.Button(self.root, text="Renovar Empréstimo", command=renovar).pack(pady=20)
         tk.Button(self.root, text="Voltar", command=self.create_main_menu).pack(pady=10)
+    
+    
+    def cadastrar_colecao(self):
+        self.clear_window()
+        tk.Label(self.root, text="Cadastrar Coleção", font=("Arial", 16)).pack(pady=10)
+        
+        tk.Label(self.root, text="Nome da Coleção").pack()
+        nome_entry = tk.Entry(self.root)
+        nome_entry.pack()
+        
+        def submit():
+            nome = nome_entry.get()
+            if not nome:
+                messagebox.showwarning("Erro", "O nome da coleção não pode estar vazio.")
+                return
+            
+            colecao = biblioteca_camada_logica.Colecao(nome)
+            id_colecao = DAO.cadastrar_colecao(colecao)
+            colecao.id = id_colecao
+            
+            messagebox.showinfo("Sucesso", f"Coleção '{colecao.nome}' cadastrada com sucesso!")
+            self.create_main_menu()
+        
+        tk.Button(self.root, text="Cadastrar", command=submit).pack(pady=20)
 
+    
     def menu_do_desenvolvedor(self):
         self.clear_window()
         tk.Label(self.root, text="Comandos do Desenvolvedor", font=("Arial", 16)).pack(pady=10)
@@ -369,7 +398,7 @@ class BibliotecaApp:
             ("Visualizar Usuários", self.visualizar_usuarios),
             ("Visualizar Livros", self.visualizar_livros),
             ("Visualizar Exemplares", self.visualizar_exemplares),
-            ("Visualizar Empréstimos", self.visualizar_emprestimos),
+            ("Visualizar Empréstimos", self.visualizar_todos_emprestimos),
             ("Voltar", self.create_main_menu)
         ]
         
@@ -377,26 +406,41 @@ class BibliotecaApp:
             tk.Button(self.root, text=text, command=command, width=30).pack(pady=5)
 
     def visualizar_bibliotecarios(self):
-        self.display_data("Bibliotecários", DAO.get_bibliotecarios())
-    
+        data, columns = DAO.get_bibliotecarios()
+        self.display_data("Bibliotecários", data, columns)
+
     def visualizar_assistentes(self):
-        self.display_data("Assistentes", DAO.get_assistentes())
+        data, columns = DAO.get_assistentes()
+        self.display_data("Assistentes", data, columns)
     
     def visualizar_usuarios(self):
-        self.display_data("Usuários", DAO.get_usuarios())
+        data, columns = DAO.get_usuarios()
+        self.display_data("Usuários", data, columns)
     
     def visualizar_livros(self):
-        self.display_data("Livros", DAO.get_livros())
+        data, columns = DAO.get_livros()
+        self.display_data("Livros", data, columns)
     
-    def visualizar_exemplares(self):
-        ISBN = tk.simpledialog.askstring("ISBN", "Digite o ISBN:")
-        exemplares = DAO.get_exemplares(ISBN)
-        self.display_data("Exemplares", exemplares)
+    def visualizar_exemplares(self, isbn):
+        data, columns = DAO.get_exemplares(isbn)
+        self.display_data("Exemplares", data, columns)
     
-    def visualizar_emprestimos(self):
-        self.display_data("Empréstimos", DAO.get_todos_emprestimos())
+    def visualizar_emprestimo(self, isbn, exemplar):
+        data, columns = DAO.get_emprestimo(isbn, exemplar)
+        if data:
+            # Se houver dados, exibe a linha com as colunas correspondentes
+            self.display_data("Empréstimo", [data], columns)
+        else:
+            # Se não houver dados, exibe uma mensagem indicando que não foi encontrado
+            tk.Label(self.root, text="Empréstimo não encontrado", font=("Arial", 12)).pack(pady=10)
+    
+    def visualizar_todos_emprestimos(self):
+        data, columns = DAO.get_todos_emprestimos()
+        self.display_data("Todos os Empréstimos", data, columns)
 
-    def display_data(self, title, data):
+
+    
+    def display_data(self, title, data, columns):
         self.clear_window()
         
         tk.Label(self.root, text=title, font=("Arial", 16)).pack(pady=10)
@@ -407,7 +451,6 @@ class BibliotecaApp:
             return
         
         # Cria o Treeview (tabela)
-        columns = list(data[0].keys())  # Usa as chaves do primeiro item como nomes das colunas
         tree = ttk.Treeview(self.root, columns=columns, show="headings")
         
         # Define as colunas e os cabeçalhos
@@ -417,13 +460,13 @@ class BibliotecaApp:
         
         # Insere cada item na tabela
         for item in data:
-            values = [item[col] for col in columns]  # Pega os valores na ordem das colunas
-            tree.insert("", tk.END, values=values)
+            tree.insert("", tk.END, values=item)  # Os valores são as tuplas retornadas pela consulta
         
         tree.pack(expand=True, fill="both", padx=10, pady=10)
-
+    
         # Botão para voltar
         tk.Button(self.root, text="Voltar", command=self.menu_do_desenvolvedor).pack(pady=10)
+
 
 
     
