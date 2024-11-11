@@ -1,0 +1,105 @@
+-- tabela colecao
+create table colecao (
+id serial primary key,
+nome varchar(255)
+);
+
+-- tabela bibliotecario
+create table bibliotecario (
+id serial primary key,
+cpf varchar(11) unique,
+nome varchar(255),
+rua varchar(255),
+cidade varchar(255),
+cep varchar(10),
+telefone varchar(20),
+endereco varchar(255)
+);
+
+-- tabela livro
+create table livro (
+isbn varchar(13) primary key,
+titulo varchar(255),
+editora varchar(255),
+autores varchar(5000),
+id_colecao int,
+id_bibliotecario int, -- id do bibliotecário que registrou o livro
+foreign key (id_colecao) references colecao(id),
+foreign key (id_bibliotecario) references bibliotecario(id)
+);
+
+-- tabela categoria
+create table categoria (
+id_cat serial primary key,
+nome varchar(255),
+tempo_emprestimo int
+);
+
+-- tabela exemplar
+create table exemplar (
+id serial primary key,
+isbn_livro varchar(13),
+status varchar(50),
+id_bibliotecario int, -- id do bibliotecário que registrou o exemplar
+foreign key (isbn_livro) references livro(isbn),
+foreign key (id_bibliotecario) references bibliotecario(id)
+);
+
+-- tabela usuario
+create table usuario (
+id serial primary key,
+nome varchar(255),
+rua varchar(255),
+cidade varchar(255),
+cpf varchar(11) unique,
+cep varchar(10),
+telefone varchar(20),
+endereco varchar(255),
+multa numeric,
+id_categoria int,
+foreign key (id_categoria) references categoria(id_cat)
+);
+
+-- tabela emprestimo
+create table emprestimo (
+id serial primary key,
+inicio date,
+fim date,
+devolucao date,
+renovacoes int,
+id_exemplar int,
+id_usuario int,
+multa float,
+foreign key (id_exemplar) references exemplar(id),
+foreign key (id_usuario) references usuario(id)
+);
+
+-- tabela reserva
+create table reserva (
+id serial primary key,
+data_res date,
+id_livro varchar(13),
+id_usuario int,
+foreign key (id_livro) references livro(isbn),
+foreign key (id_usuario) references usuario(id)
+);
+
+-- tabela assistente
+create table assistente (
+id serial primary key,
+cpf varchar(11) unique,
+nome varchar(255),
+rua varchar(255),
+cidade varchar(255),
+cep varchar(10),
+telefone varchar(20),
+endereco varchar(255),
+id_bibliotecario int,
+foreign key (id_bibliotecario) references bibliotecario(id)
+);
+
+
+insert into categoria values(1,'Aluno graduacao',15);
+insert into categoria values(2,'Aluno pos-graduacao',30);
+insert into categoria values(3,'Professor',30);
+insert into categoria values(4,'Professor pos-graduacao',90);

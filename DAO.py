@@ -13,11 +13,11 @@ cursor = conn.cursor()
 def cadastrar_bibliotecario(bibliotecario):
     cursor.execute(
         """
-        insert into bibliotecario (nome, endereco, cidade, cep, telefone, cpf)
-        values (%s, %s, %s, %s, %s, %s) returning id;
+        insert into bibliotecario (cpf, nome, rua, cidade, cep, telefone, endereco)
+        values (%s, %s, %s, %s, %s, %s, %s) returning id;
         """,
-        (bibliotecario.nome, bibliotecario.endereco, bibliotecario.cidade, bibliotecario.cep, 
-         bibliotecario.telefone, bibliotecario.cpf)
+        (bibliotecario.cpf, bibliotecario.nome, bibliotecario.rua, bibliotecario.cidade, 
+         bibliotecario.cep, bibliotecario.telefone, bibliotecario.endereco)
     )
     conn.commit()
     bibliotecario_id = cursor.fetchone()[0]
@@ -35,11 +35,11 @@ def get_bibliotecarios():
 def cadastrar_assistente(assistente):
     cursor.execute(
         """
-        insert into assistente (nome, endereco, cidade, cep, telefone, cpf, id_bibliotecario)
-        values (%s, %s, %s, %s, %s, %s, %s) returning id;
+        insert into assistente (cpf, nome, rua, cidade, cep, telefone, endereco, id_bibliotecario)
+        values (%s, %s, %s, %s, %s, %s, %s, %s) returning id;
         """,
-        (assistente.nome, assistente.endereco, assistente.cidade, assistente.cep, 
-         assistente.telefone, assistente.cpf, assistente.id_bibliotecario)
+        (assistente.cpf, assistente.nome, assistente.rua, assistente.cidade, assistente.cep, 
+         assistente.telefone, assistente.endereco, assistente.id_bibliotecario)
     )
     conn.commit()
     assistente_id = cursor.fetchone()[0]
@@ -78,10 +78,10 @@ def get_usuarios():
 def cadastrar_livro(livro):
     cursor.execute(
         """
-        insert into livro (titulo, autores, isbn, editora, id_colecao, id_bibliotecario)
+        insert into livro (isbn, titulo, editora, autores, id_colecao, id_bibliotecario)
         values (%s, %s, %s, %s, %s, %s) returning isbn;
         """,
-        (livro.titulo, livro.autores, livro.isbn, livro.editora, livro.id_colecao, livro.id_bibliotecario)
+        (livro.isbn, livro.titulo, livro.editora, livro.autores, livro.id_colecao, livro.id_bibliotecario)
     )
     conn.commit()
     print("\nlivro cadastrado com isbn:", livro.isbn)
@@ -95,16 +95,16 @@ def get_livros():
 
 
 # função para cadastrar exemplar
-def cadastrar_exemplar(exemplar, isbn):
+def cadastrar_exemplar(exemplar):
     cursor.execute(
         """
         insert into exemplar (isbn_livro, status, id_bibliotecario)
         values (%s, %s, %s) returning id;
         """,
-        (isbn, exemplar.status, exemplar.id_bibliotecario)
+        (exemplar.isbn, exemplar.status, exemplar.id_bibliotecario)
     )
     conn.commit()
-    print("exemplar cadastrado para o livro com isbn:", isbn)
+    print("exemplar cadastrado para o livro com isbn:", exemplar.isbn)
 
 
 def get_exemplares(isbn):
@@ -114,12 +114,12 @@ def get_exemplares(isbn):
     return data, columns
 
 
-def get_exemplar(isbn, id):
+def get_exemplar(id):
     cursor.execute(
         """
-        select * from exemplar where isbn_livro = %s and id = %s;
+        select * from exemplar where id = %s;
         """, 
-        (isbn, id)
+        (id,)
     )
     data = cursor.fetchone()
     columns = [desc[0] for desc in cursor.description] if data else []
@@ -147,22 +147,16 @@ def atualizar_exemplar(id_exemplar, novo_status):
 def adicionar_emprestimo_usuario(emprestimo):
     cursor.execute(
         """
-        insert into emprestimo (data_emp, data_dev, renovacoes, id_exemplar, id_usuario)
-        values (%s, %s, %s, %s, %s) returning id;
+        insert into emprestimo (inicio, fim, devolucao, renovacoes, id_exemplar, id_usuario)
+        values (%s, %s, %s, %s, %s, %s) returning id;
         """,
-        (emprestimo.data_emp, emprestimo.data_dev, emprestimo.renovacoes, emprestimo.id_exemplar, emprestimo.id_usuario)
+        (emprestimo.inicio, emprestimo.fim, emprestimo.devolucao, emprestimo.renovacoes, emprestimo.id_exemplar, emprestimo.id_usuario)
     )
     conn.commit()
     emprestimo_id = cursor.fetchone()[0]
     print("empréstimo adicionado com sucesso com id:", emprestimo_id)
 
-# função para obter o id do último empréstimo
-def get_id_ultimo_emprestimo():
-    cursor.execute("select id from emprestimo order by id desc limit 1;")
-    ultimo_emprestimo = cursor.fetchone()
-    if ultimo_emprestimo:
-        return ultimo_emprestimo[0]
-    return 0
+
 
 # função para obter um usuário por cpf
 def get_usuario(cpf):
@@ -170,53 +164,62 @@ def get_usuario(cpf):
     return cursor.fetchone()
 
 
-def get_emprestimo(isbn, exemplar):
+def get_usuario_pelo_id(id):
+    cursor.execute("select * from usuario where id = %s;", (id,))
+    return cursor.fetchone()
+
+def get_id_usuario(cpf):
+    cursor.execute("select id from usuario where cpf = %s;",(cpf,))
+    return cursor.fetchone()
+
+def get_todos_emprestimos_usuario(id_usuario):
     cursor.execute(
         """
-        select * from emprestimo where isbn_livro = %s and id_exemplar = %s;
+        select * from emprestimo where id_usuario = %s;
         """, 
-        (isbn, exemplar)
+        (id_usuario,)
     )
-    data = cursor.fetchone()  # retorna uma única linha, ou none se não houver correspondência
+    data = cursor.fetchall()  # retorna uma única linha, ou none se não houver correspondência
     columns = [desc[0] for desc in cursor.description] if data else []  # obtém os nomes das colunas, se houver dados
     return data, columns
 
 
 # função para atualizar empréstimo
-def atualizar_emprestimo(id_emprestimo, data_devolucao, multa, renovacoes):
+def atualizar_emprestimo(id_emprestimo, devolucao, multa, renovacoes, fim):
     cursor.execute(
         """
         update emprestimo
-        set data_dev = %s, multa = %s, renovacoes = %s
+        set devolucao = %s, multa = %s, renovacoes = %s, fim = %s
         where id = %s;
         """,
-        (data_devolucao, multa, renovacoes, id_emprestimo)
+        (devolucao, multa, renovacoes, fim, id_emprestimo)
     )
     conn.commit()
     print("empréstimo atualizado com sucesso!")
+    
+
+def multar_usuario(multa, usuario_id):
+    cursor.execute(
+            """
+            UPDATE usuario
+            SET multa = %s
+            WHERE id = %s;
+            """, 
+            (multa, usuario_id)  # Passa o valor 30 para multa e o id do usuário
+        ) 
+    conn.commit()
 
 # função para obter coleção do livro
 def get_colecao(isbn):
     cursor.execute(
         """
-        select id_colecao from livro where isbn = %s;
+        select colecao.nome from colecao join livro ON colecao.id = livro.id_colecao and isbn= %s;
         """,
         (isbn,)
     )
     colecao = cursor.fetchone()
     return colecao[0] if colecao else None
 
-# função para apagar empréstimo do usuário
-def apagar_emprestimo_usuario(cpf, emprestimo_id, multa):
-    cursor.execute(
-        """
-        delete from emprestimo
-        where id = %s and id_usuario = (select id from usuario where cpf = %s);
-        """,
-        (emprestimo_id, cpf)
-    )
-    conn.commit()
-    print("empréstimo apagado com sucesso!")
 
 
 def get_todos_emprestimos():
@@ -226,29 +229,20 @@ def get_todos_emprestimos():
     return data, columns
 
 
-# função para atualizar o empréstimo no usuário
-def atualizar_emprestimo_em_usuario(cpf, id_emprestimo, renovacoes, fim):
-    cursor.execute(
-        """
-        update usuario
-        set renovacoes = %s, fim = %s
-        where cpf = %s and exists (
-            select 1 from emprestimo where id = %s and id_usuario = usuario.id
-        );
-        """, 
-        (renovacoes, fim, cpf, id_emprestimo)
-    )
-    conn.commit()
-    print("empréstimo do usuário atualizado com sucesso!")
-    
-    
+        
 
 def cadastrar_colecao(colecao):
     query = "INSERT INTO colecao (nome) VALUES (%s) RETURNING id;"
-    # Supondo que o banco de dados esteja configurado e que você tenha uma conexão aberta
     cursor = conn.cursor()
     cursor.execute(query, (colecao.nome,))
     id_colecao = cursor.fetchone()[0]
     conn.commit()
     cursor.close()
     return id_colecao
+
+
+def get_emprestimo_nao_devolvido(id_exemplar):
+    cursor.execute("select * from emprestimo where id_exemplar = %s and devolucao is NULL",(id_exemplar,))
+    return cursor.fetchone()
+
+    

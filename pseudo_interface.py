@@ -4,6 +4,7 @@ from tkinter import ttk
 import biblioteca_camada_logica
 import DAO
 import datetime
+from datetime import datetime,timedelta
 
 class BibliotecaApp:
     def __init__(self, root):
@@ -90,7 +91,7 @@ class BibliotecaApp:
         self.clear_window()
         tk.Label(self.root, text="Cadastrar Usuário", font=("Arial", 16)).pack(pady=10)
         
-        fields = ["CPF", "Nome", "Rua", "Cidade", "CEP", "Telefone", "Endereço"]
+        fields = ["Nome", "Rua", "Cidade", "CPF", "CEP", "Telefone", "Endereço"]
         entries = {}
         
         for field in fields:
@@ -115,8 +116,8 @@ class BibliotecaApp:
             
             categoria_id = categoria_var.get()
             usuario = biblioteca_camada_logica.Usuario(
-                entries["CPF"].get(), entries["Nome"].get(), entries["Rua"].get(), 
-                entries["Cidade"].get(), entries["CEP"].get(), entries["Telefone"].get(), 
+                entries["Nome"].get(), entries["Rua"].get(), entries["Cidade"].get(), 
+                entries["CPF"].get(), entries["CEP"].get(), entries["Telefone"].get(), 
                 entries["Endereço"].get(), 0, categoria_id
             )
             DAO.cadastrar_usuario(usuario)
@@ -141,8 +142,8 @@ class BibliotecaApp:
         def submit():
             autores = entries["Autores (separados por vírgula)"].get().split(",")
             livro = biblioteca_camada_logica.Livro(
-                entries["Título"].get(), autores, entries["isbn"].get(), 
-                entries["Editora"].get(), entries["id_coleção"].get(), entries["id_bibliotecario"].get()
+                entries["isbn"].get(), entries["Título"].get(), 
+                entries["Editora"].get(), autores, entries["id_coleção"].get(), entries["id_bibliotecario"].get()
             )
             DAO.cadastrar_livro(livro)
             messagebox.showinfo("Sucesso", "Livro cadastrado com sucesso!")
@@ -158,9 +159,6 @@ class BibliotecaApp:
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
         
-        tk.Label(self.root, text="Número do Exemplar").pack()
-        num_entry = tk.Entry(self.root)
-        num_entry.pack()
         
         tk.Label(self.root, text="id_bibliotecario").pack()
         id_bibliotecario_entry = tk.Entry(self.root)
@@ -177,12 +175,9 @@ class BibliotecaApp:
                 messagebox.showwarning("Erro", "isbn não encontrado no banco de dados!")
                 return
             
-            if DAO.get_exemplar(isbn_entry.get(), int(num_entry.get()))[0]:
-                messagebox.showwarning("Erro", "Exemplar já cadastrado!")
-                return
             
-            exemplar = biblioteca_camada_logica.Exemplar(int(num_entry.get()), status_var.get(),int(id_bibliotecario_entry.get()))
-            DAO.cadastrar_exemplar(exemplar, isbn_entry.get())
+            exemplar = biblioteca_camada_logica.Exemplar(isbn_entry.get(), status_var.get(),int(id_bibliotecario_entry.get()))
+            DAO.cadastrar_exemplar(exemplar)
             messagebox.showinfo("Sucesso", "Exemplar cadastrado com sucesso!")
             self.create_main_menu()
         
@@ -193,53 +188,63 @@ class BibliotecaApp:
     def realizar_emprestimo(self):
         self.clear_window()
         tk.Label(self.root, text="Realizar Empréstimo", font=("Arial", 16)).pack(pady=10)
-        
+    
         # Campos de entrada para realizar o empréstimo
         tk.Label(self.root, text="isbn").pack()
         isbn_entry = tk.Entry(self.root)
         isbn_entry.pack()
-        
-        tk.Label(self.root, text="Número do Exemplar").pack()
+    
+        tk.Label(self.root, text="id do Exemplar").pack()
         exemplar_entry = tk.Entry(self.root)
         exemplar_entry.pack()
-        
+    
         tk.Label(self.root, text="CPF do Usuário").pack()
         cpf_entry = tk.Entry(self.root)
         cpf_entry.pack()
-        
+    
+        tk.Label(self.root, text="Data hoje (DD-MM-YYYY)").pack()
+        hoje_entry = tk.Entry(self.root)
+        hoje_entry.pack()
+    
         def submit():
             try:
                 # Verificação dos dados do usuário e exemplar
                 isbn = isbn_entry.get()
-                num_exemplar = int(exemplar_entry.get())
+                id_exemplar = int(exemplar_entry.get())
                 CPF = cpf_entry.get()
-                
+    
                 usuario = DAO.get_usuario(CPF)
                 if not usuario:
                     messagebox.showwarning("Erro", "Usuário não encontrado!")
                     return
-                
-                # Supondo que a tupla retornada tenha a categoria_id na posição 2
-                categoria_id = usuario[8]  # Acessa o id da categoria da tupla
+    
+                # Supondo que a tupla retornada tenha a categoria_id na posição 9
+                categoria_id = usuario[9]  # Acessa o id da categoria da tupla
                 qtd_dias = {
                     1: 15,  # Aluno de graduação
                     2: 30,  # Aluno de pós-graduação
                     3: 30,  # Professor
                     4: 90   # Professor de pós-graduação
                 }.get(categoria_id, 15)  # Valor padrão é 15 se o id não for encontrado
+    
+              
+                data_hoje_str = hoje_entry.get().strip()  
+                data_hoje = datetime.strptime(data_hoje_str, "%d-%m-%Y").date()
                 
-                # Agora, a variável qtd_dias terá o valor adequado com base no id da categoria
+                fim = data_hoje + timedelta(days=qtd_dias)  # Utilizando qtd_dias em vez de valor fixo 15
+                usuario_id = usuario[0]
+                
 
-                
-                data_hoje = datetime.date.today()
-                emprestimo = biblioteca_camada_logica.Emprestimo(data_hoje, isbn, num_exemplar, CPF, qtd_dias)
+                emprestimo = biblioteca_camada_logica.Emprestimo(data_hoje, fim, id_exemplar, usuario_id)
                 biblioteca_camada_logica.emprestar_livro(emprestimo, data_hoje)
-                
+    
                 messagebox.showinfo("Sucesso", "Empréstimo realizado com sucesso!")
                 self.create_main_menu()
-            except ValueError:
-                messagebox.showerror("Erro", "Por favor, insira dados válidos.")
-        
+    
+            except ValueError as e:
+                messagebox.showerror("Erro", f"{e}.")
+
+            
         tk.Button(self.root, text="Realizar Empréstimo", command=submit).pack(pady=20)
     
     
@@ -297,10 +302,10 @@ class BibliotecaApp:
                 isbn = isbn_entry.get()
                 num_exemplar = int(exemplar_entry.get())
                 data_devolucao_str = data_devolucao_entry.get()
-                data_devolucao = datetime.datetime.strptime(data_devolucao_str, "%d-%m-%Y").date()
+                data_devolucao = datetime.strptime(data_devolucao_str, "%d-%m-%Y").date()
                 
                 # Função para processar a devolução
-                biblioteca_camada_logica.devolver_livro(isbn, num_exemplar, data_devolucao)
+                biblioteca_camada_logica.devolver_livro(num_exemplar, data_devolucao)
                 messagebox.showinfo("Sucesso", "Devolução realizada com sucesso!")
                 self.create_main_menu()
             except ValueError:
@@ -334,22 +339,22 @@ class BibliotecaApp:
                 isbn = isbn_entry.get()
                 num_exemplar = int(exemplar_entry.get())
                 data_hoje_str = data_hoje_entry.get()
-                data_hoje = datetime.datetime.strptime(data_hoje_str, "%d-%m-%Y").date()
+                data_hoje = datetime.strptime(data_hoje_str, "%d-%m-%Y").date()
                 
                 # Verificar renovação
-                emprestimo = DAO.get_emprestimo(isbn, num_exemplar)
+                emprestimo = DAO.get_emprestimo_nao_devolvido(num_exemplar)
                 if not emprestimo:
                     messagebox.showwarning("Erro", "Empréstimo não encontrado!")
                     return
     
                 # Verifica as condições para renovação
-                if data_hoje > datetime.datetime.strptime(emprestimo['Fim'], "%d-%m-%Y").date():
+                if data_hoje > emprestimo[2]:
                     messagebox.showwarning("Erro", "Livro atrasado, não pode ser renovado.")
                     return
-                if emprestimo['Renovacoes'] >= 3:
+                if emprestimo[4] >= 3:
                     messagebox.showwarning("Erro", "Limite de renovações atingido.")
                     return
-                if emprestimo['Data de devolucao']:
+                if emprestimo[3]:
                     messagebox.showwarning("Erro", "Livro já foi devolvido, não é possível renovar.")
                     return
                 
