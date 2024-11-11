@@ -1,87 +1,90 @@
+-- Tabela Bibliotecario
+CREATE TABLE Bibliotecario (
+    ID SERIAL PRIMARY KEY,
+    nome VARCHAR(255),
+    endereco VARCHAR(255),
+    cidade VARCHAR(255),
+    cep VARCHAR(10),
+    telefone VARCHAR(20)
+);
+
 -- Tabela Colecao
 CREATE TABLE Colecao (
     ID SERIAL PRIMARY KEY,
-    Nome VARCHAR(255)
+    nome VARCHAR(255)
+);
+
+-- Tabela Categoria
+CREATE TABLE Categoria (
+    id_cat SERIAL PRIMARY KEY,
+    nome VARCHAR(255),
+    tempo_emprestimo INT
 );
 
 -- Tabela Livro
 CREATE TABLE Livro (
     ISBN VARCHAR(13) PRIMARY KEY,
-    Titulo VARCHAR(255),
-    Editora VARCHAR(255),
-    ID_Colecao INT,
-    ID_Bibliotecario INT,
-    FOREIGN KEY (ID_Colecao) REFERENCES Colecao(ID),
-    FOREIGN KEY (ID_Bibliotecario) REFERENCES Bibliotecario(ID)
-);
-
--- Tabela Categoria
-CREATE TABLE Categoria (
-    ID_cat SERIAL PRIMARY KEY,
-    Nome VARCHAR(255),
-    Tempo_Emprestimo INT
+    titulo VARCHAR(255),
+    editora VARCHAR(255),
+    id_colecao INT,
+    id_bibliotecario INT, -- ID do bibliotecário que registrou o livro
+    FOREIGN KEY (id_colecao) REFERENCES Colecao(ID),
+    FOREIGN KEY (id_bibliotecario) REFERENCES Bibliotecario(ID)
 );
 
 -- Tabela Exemplar
 CREATE TABLE Exemplar (
     id SERIAL PRIMARY KEY,
-    ISBN_Livro VARCHAR(13),
-    Status VARCHAR(50),
-    ID_Bibliotecario INT,
-    FOREIGN KEY (ISBN_Livro) REFERENCES Livro(ISBN),
-    FOREIGN KEY (ID_Bibliotecario) REFERENCES Bibliotecario(ID)
+    isbn_livro VARCHAR(13),
+    status VARCHAR(50),
+    id_bibliotecario INT, -- ID do bibliotecário que registrou o exemplar
+    FOREIGN KEY (isbn_livro) REFERENCES Livro(ISBN),
+    FOREIGN KEY (id_bibliotecario) REFERENCES Bibliotecario(ID)
 );
 
 -- Tabela Usuario
 CREATE TABLE Usuario (
     ID SERIAL PRIMARY KEY,
     nome VARCHAR(255),
-    Rua VARCHAR(255),
-    Cidade VARCHAR(255),
-    CEP VARCHAR(10),
-    Telefone VARCHAR(20),
-    Endereco VARCHAR(255),
-    Multa NUMERIC
+    endereco VARCHAR(255),
+    cidade VARCHAR(255),
+    cep VARCHAR(10),
+    telefone VARCHAR(20),
+    multa NUMERIC,
+    id_categoria INT,
+    FOREIGN KEY (id_categoria) REFERENCES Categoria(id_cat)
 );
 
 -- Tabela Emprestimo
 CREATE TABLE Emprestimo (
     ID SERIAL PRIMARY KEY,
-    Data_Emp DATE,
-    Data_Dev DATE,
-    Renovacoes INT,
-    ID_Exemplar INT,
-    FOREIGN KEY (ID_Exemplar) REFERENCES Exemplar(id)
+    data_emp DATE,
+    data_dev DATE,
+    renovacoes INT,
+    id_exemplar INT,
+    id_usuario INT,
+    FOREIGN KEY (id_exemplar) REFERENCES Exemplar(id),
+    FOREIGN KEY (id_usuario) REFERENCES Usuario(ID)
 );
 
 -- Tabela Reserva
 CREATE TABLE Reserva (
     ID SERIAL PRIMARY KEY,
-    Data_Res DATE,
-    ID_Livro INT,
-    FOREIGN KEY (ID_Livro) REFERENCES Livro(ID)
-);
-
--- Tabela Bibliotecario
-CREATE TABLE Bibliotecario (
-    ID SERIAL PRIMARY KEY,
-    nome VARCHAR(255),
-    Rua VARCHAR(255),
-    Cidade VARCHAR(255),
-    CEP VARCHAR(10),
-    Telefone VARCHAR(20),
-    Endereco VARCHAR(255)
+    data_res DATE,
+    isbn_livro VARCHAR(13),
+    id_usuario INT,
+    FOREIGN KEY (isbn_livro) REFERENCES Livro(ISBN),
+    FOREIGN KEY (id_usuario) REFERENCES Usuario(ID)
 );
 
 -- Tabela Assistente
 CREATE TABLE Assistente (
     ID SERIAL PRIMARY KEY,
     nome VARCHAR(255),
-    Rua VARCHAR(255),
-    Cidade VARCHAR(255),
-    CEP VARCHAR(10),
-    Telefone VARCHAR(20),
-    Endereco VARCHAR(255),
-    ID_Bibliotecario INT,
-    FOREIGN KEY (ID_Bibliotecario) REFERENCES Bibliotecario(ID)
+    endereco VARCHAR(255),
+    cidade VARCHAR(255),
+    cep VARCHAR(10),
+    telefone VARCHAR(20),
+    id_bibliotecario INT,
+    FOREIGN KEY (id_bibliotecario) REFERENCES Bibliotecario(ID)
 );
