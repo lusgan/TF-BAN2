@@ -1,23 +1,25 @@
+-- Função para isentar multas para professores
 CREATE FUNCTION isentar_multa() RETURNS TRIGGER AS $$
 BEGIN
     -- Verifica se a categoria do usuário é 'Professor' ou 'Professor Pós-graduação'
-    IF NEW.ID_Categoria IN (SELECT ID_cat FROM Categoria WHERE Nome IN ('Professor', 'Professor Pós-graduação')) THEN
-        NEW.Multa := 0;  -- Isenta a multa
+    IF NEW.id_categoria IN (SELECT id_cat FROM categoria WHERE nome IN ('Professor', 'Professor pos-graduacao')) THEN
+        NEW.multa := 0;  -- Isenta a multa
     END IF;
     RETURN NEW;
-END;
+END; 
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER isentar_multas_professores
-BEFORE UPDATE ON Usuario
+BEFORE UPDATE ON usuario
 FOR EACH ROW
-WHEN (NEW.ID_Categoria IN (SELECT ID_cat FROM Categoria WHERE Nome IN ('Professor', 'Professor Pós-graduação')))
 EXECUTE FUNCTION isentar_multa();
 
+
+-- Função para limitar o número de renovações de empréstimo
 CREATE FUNCTION verificar_limite_renovacoes() RETURNS TRIGGER AS $$
 BEGIN
     -- Verifica se o número de renovações excede 3
-    IF NEW.Renovacoes > 3 THEN
+    IF NEW.renovacoes > 3 THEN
         RAISE EXCEPTION 'O empréstimo não pode ser renovado mais que 3 vezes.';
     END IF;
     RETURN NEW;
@@ -25,15 +27,16 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER limitar_renovacoes
-BEFORE UPDATE ON Emprestimo
+BEFORE UPDATE ON emprestimo
 FOR EACH ROW
-WHEN (NEW.Renovacoes > 3)
 EXECUTE FUNCTION verificar_limite_renovacoes();
 
+
+-- Função para impedir empréstimo de livros da coleção de reserva
 CREATE FUNCTION verificar_colecao_reserva() RETURNS TRIGGER AS $$
 BEGIN
-    -- Verifica se o livro pertence à coleção 'Reserva'
-    IF (SELECT Nome FROM Colecao WHERE ID = (SELECT ID_Colecao FROM Livro WHERE ISBN = (SELECT ISBN_Livro FROM Exemplar WHERE id = NEW.ID_Exemplar))) = 'Reserva' THEN
+    -- Verifica se o exemplar pertence à coleção 'Reserva'
+    IF (SELECT nome FROM colecao WHERE id = (SELECT id_colecao FROM livro WHERE isbn = (SELECT isbn_livro FROM exemplar WHERE id = NEW.id_exemplar))) = 'Reserva' THEN
         RAISE EXCEPTION 'Não é permitido emprestar exemplares da coleção de reserva.';
     END IF;
     RETURN NEW;
@@ -41,36 +44,79 @@ END;
 $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER impedir_emprestimo_reserva
-BEFORE INSERT ON Emprestimo
+BEFORE INSERT ON emprestimo
 FOR EACH ROW
 EXECUTE FUNCTION verificar_colecao_reserva();
 
+
+-- Função para verificar se o usuário pode realizar empréstimos
 CREATE FUNCTION pode_emprestar(id_usuario INT) RETURNS BOOLEAN AS $$
 DECLARE
     atraso BOOLEAN;
     multa BOOLEAN;
     limite BOOLEAN;
 BEGIN
-    -- Verifica se o usuário tem livros atrasados
+    -- Verifica se o usuário tem exemplares com status 'Atrasado'
     SELECT COUNT(*) > 0 INTO atraso 
-    FROM Emprestimo E
-    JOIN Exemplar EX ON E.ID_Exemplar = EX.ID
-    WHERE EX.Status = 'Atrasado' AND E.ID_Usuario = id_usuario;
+    FROM emprestimo E
+    JOIN exemplar EX ON E.id_exemplar = EX.id
+    WHERE EX.status = 'Atrasado' AND E.id_usuario = id_usuario;
 
     -- Verifica se o usuário tem multas pendentes
-    SELECT Multa > 0 INTO multa
-    FROM Usuario
-    WHERE ID = id_usuario;
+    SELECT multa > 0 INTO multa
+    FROM usuario
+    WHERE id = id_usuario;
 
     -- Verifica se o usuário excedeu o limite de empréstimos
-    SELECT COUNT(*) >= (SELECT Tempo_Emprestimo FROM Categoria WHERE ID_cat = (SELECT ID_Categoria FROM Usuario WHERE ID = id_usuario)) INTO limite
-    FROM Emprestimo
-    WHERE ID_Usuario = id_usuario AND Data_Dev IS NULL;
+    SELECT COUNT(*) >= (SELECT tempo_emprestimo FROM categoria WHERE id_cat = (SELECT id_categoria FROM usuario WHERE id = id_usuario)) INTO limite
+    FROM emprestimo
+    WHERE id_usuario = id_usuario AND devolucao IS NULL;
 
     IF atraso OR multa OR limite THEN
         RETURN FALSE;  -- Não pode emprestar
     ELSE
         RETURN TRUE;  -- Pode emprestar
     END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE FUNCTION emprestar_exemplar_reservado() RETURNS TRIGGER AS $$
+DECLARE
+    id_reserva INT;
+    id_usuario_reserva INT;
+    data_devolucao DATE;
+BEGIN
+    -- Verifica se a data de devolução foi atualizada
+    IF NEW.devolucao IS NOT NULL THEN
+        -- Verifica se o exemplar não tem ID 1
+        IF NEW.id_exemplar != 1 THEN
+            -- Seleciona o id do usuário que fez a reserva mais antiga para o livro deste exemplar
+            SELECT r.id_usuario, r.data_res
+            INTO id_usuario_reserva, data_devolucao
+            FROM reserva r
+            JOIN exemplar e ON r.id_livro = e.isbn_livro
+            WHERE e.id = NEW.id_exemplar
+            ORDER BY r.data_res
+            LIMIT 1;  -- Considera a reserva mais antiga
+
+            -- Verifica se há uma reserva para este exemplar
+            IF id_usuario_reserva IS NOT NULL THEN
+                -- Cria um novo empréstimo para o usuário da reserva
+                INSERT INTO emprestimo (inicio, fim, devolucao, renovacoes, id_exemplar, id_usuario, multa)
+                VALUES (data_devolucao + 1,  -- Início do novo empréstimo, um dia após a devolução
+                        data_devolucao + 1 + (SELECT tempo_emprestimo FROM categoria WHERE id_cat = (SELECT id_categoria FROM usuario WHERE id = id_usuario_reserva)),
+                        NULL,  -- Sem data de devolução no momento do novo empréstimo
+                        0,     -- Renovação inicial
+                        NEW.id_exemplar,
+                        id_usuario_reserva,
+                        0);    -- Inicialmente sem multa
+
+                -- Remove a reserva atendida
+                DELETE FROM reserva WHERE id_usuario = id_usuario_reserva AND id_livro = (SELECT isbn_livro FROM exemplar WHERE id = NEW.id_exemplar);
+            END IF;
+        END IF;
+    END IF;
+
+    RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
