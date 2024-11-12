@@ -1,5 +1,4 @@
 from datetime import datetime, timedelta
-import datetime
 import DAO
 
 # Classes da Biblioteca
@@ -132,6 +131,11 @@ def emprestar_livro(emprestimo, data_hoje):
 
     if not exemplar:
         print("Exemplar nao cadastrado.")
+    elif DAO.get_emprestimo_nao_devolvido(emprestimo.id_exemplar):
+        emprestimo.inicio = emprestimo.fim + timedelta(days=1)
+
+        DAO.adicionar_reserva_usuario(emprestimo,exemplar[1])
+
     else:
         
         usuario = DAO.get_usuario_pelo_id(emprestimo.id_usuario)
