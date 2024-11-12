@@ -6,7 +6,7 @@ conn = psycopg2.connect(
     host="localhost",
     database="biblioteca",
     user="postgres",
-    password="sua senha"
+    password="udesc"
 )
 cursor = conn.cursor()
 
@@ -155,6 +155,18 @@ def adicionar_emprestimo_usuario(emprestimo):
     conn.commit()
     emprestimo_id = cursor.fetchone()[0]
     print("empréstimo adicionado com sucesso com id:", emprestimo_id)
+
+def adicionar_reserva_usuario(emprestimo,id_livro):
+    cursor.execute(
+        """
+        insert into reserva (data_res,id_livro,id_usuario)
+        values (%s, %s, %s) returning id;
+        """,
+        (emprestimo.inicio, id_livro, emprestimo.id_usuario)
+    )
+    conn.commit()
+    reserva_id = cursor.fetchone()[0]
+    print("reserva adicionado com sucesso com id:", reserva_id)
 
 
 
